@@ -6,6 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.pokesal.infra.GeradorAleatorioPadrao;
+import br.com.pokesal.infra.ProcessadorDrenoPadrao;
+import br.com.pokesal.infra.RegistroBatalhaConsole;
+import br.com.pokesal.infra.RepositorioResultadosEmMemoria;
+import br.com.pokesal.infra.ServicoTerrenoPadrao;
+import br.com.pokesal.infra.ServicoTorcidaPadrao;
 import br.com.pokesal.model.Antidote;
 import br.com.pokesal.model.AsfaltoQuente;
 import br.com.pokesal.model.CanteiroCentral;
@@ -21,11 +27,14 @@ import br.com.pokesal.model.TipoStatus;
 import br.com.pokesal.model.Treinador;
 import br.com.pokesal.service.Batalha;
 import br.com.pokesal.service.EfeitoDeStatusHeld;
+import br.com.pokesal.service.GeradorAleatorio;
 import br.com.pokesal.service.LimiteItensExcedidosException;
 import br.com.pokesal.service.SimuladorDeBatalha;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,6 +56,9 @@ public class PokeSalTest {
   private static final int DANO_EXTREMO = 9999;
   private static final int DEF_EXTREMA = 999;
 
+  private static final Clock RELOGIO_DIURNO = Clock.fixed(
+      Instant.parse("2026-11-11T12:00:00Z"), ZoneOffset.UTC);
+
   private Treinador treinador1;
   private Treinador treinador2;
   private Terreno terrenoNeutro;
@@ -59,6 +71,41 @@ public class PokeSalTest {
     treinador1 = new Treinador("Treinador Alfa");
     treinador2 = new Treinador("Treinador Beta");
     terrenoNeutro = new Terreno("Arena Neutra UCSal", null);
+  }
+
+  private Batalha criarBatalha(Treinador t1, Treinador t2, Terreno terreno) {
+    GeradorAleatorio geradorSemCritico = new GeradorAleatorio() {
+      @Override
+      public double gerarDouble() {
+        return 0.50;
+      }
+
+      @Override
+      public int gerarInteiro(int limite) {
+        return 0;
+      }
+
+      @Override
+      public boolean gerarBooleano() {
+        return true;
+      }
+    };
+    return criarBatalha(t1, t2, terreno, geradorSemCritico);
+  }
+
+  private Batalha criarBatalha(Treinador t1, Treinador t2, Terreno terreno,
+                               GeradorAleatorio gerador) {
+    return new Batalha(
+        t1,
+        t2,
+        terreno,
+        gerador,
+        new ServicoTerrenoPadrao(gerador),
+        RELOGIO_DIURNO,
+        new RepositorioResultadosEmMemoria(),
+        new RegistroBatalhaConsole(),
+        new ServicoTorcidaPadrao(gerador),
+        new ProcessadorDrenoPadrao());
   }
 
   /**
@@ -116,7 +163,7 @@ public class PokeSalTest {
     Pokesal defensorFogo = criarPokesal("CyndaSal", HP_PADRAO, ATK_PADRAO, DEF_PADRAO,
         SPD_LENTO, TipoElemental.FOGO);
 
-    Batalha batalha = new Batalha(treinador1, treinador2, terrenoNeutro);
+    Batalha batalha = criarBatalha(treinador1, treinador2, terrenoNeutro);
     Golpe golpeFogo = atacanteFogo.getGolpes().get(0);
 
     // Dano Vantagem: 40 * 2.0 = 80
@@ -142,7 +189,7 @@ public class PokeSalTest {
 
     // 1. Asfalto Quente: base 40 * 1.0 (neutro) * 1.15 = 46
     Terreno asfalto = new AsfaltoQuente();
-    Batalha batalhaAsfalto = new Batalha(treinador1, treinador2, asfalto);
+    Batalha batalhaAsfalto = criarBatalha(treinador1, treinador2, asfalto);
     assertEquals(1.15, asfalto.obterModificadorDano(TipoElemental.FOGO), 0.001);
     assertEquals(1.0, asfalto.obterModificadorDano(TipoElemental.AGUA), 0.001);
     assertEquals(46, batalhaAsfalto.calcularDano(atacanteFogo, defensorFogo, golpeFogo));
@@ -155,7 +202,7 @@ public class PokeSalTest {
     Golpe golpeAgua = atacanteAgua.getGolpes().get(0);
 
     Terreno poca = new PocaDeChuva();
-    Batalha batalhaPoca = new Batalha(treinador1, treinador2, poca);
+    Batalha batalhaPoca = criarBatalha(treinador1, treinador2, poca);
     assertEquals(1.10, poca.obterModificadorDano(TipoElemental.AGUA), 0.001);
     assertEquals(1.0, poca.obterModificadorDano(TipoElemental.FOGO), 0.001);
     assertEquals(44, batalhaPoca.calcularDano(atacanteAgua, defensorAgua, golpeAgua));
@@ -173,7 +220,7 @@ public class PokeSalTest {
     treinador2.setPokesal(fogoFerido);
 
     Terreno canteiro = new CanteiroCentral();
-    Batalha batalhaCanteiro = new Batalha(treinador1, treinador2, canteiro);
+    Batalha batalhaCanteiro = criarBatalha(treinador1, treinador2, canteiro);
     batalhaCanteiro.finalizarTurno();
 
     // Planta regenerou 5% de 100 = 5 HP (70 + 5 = 75)
@@ -197,7 +244,7 @@ public class PokeSalTest {
     treinador1.setPokesal(rapido);
     treinador2.setPokesal(lento);
 
-    Batalha batalha1 = new Batalha(treinador1, treinador2, terrenoNeutro);
+    Batalha batalha1 = criarBatalha(treinador1, treinador2, terrenoNeutro);
     assertEquals(treinador1, batalha1.determinarPrimeiroAtacante(),
         "O competidor com maior SPD deve agir primeiro.");
 
@@ -210,7 +257,7 @@ public class PokeSalTest {
     treinador1.setPokesal(lento2);
     treinador2.setPokesal(rapido2);
 
-    Batalha batalha2 = new Batalha(treinador1, treinador2, terrenoNeutro);
+    Batalha batalha2 = criarBatalha(treinador1, treinador2, terrenoNeutro);
     assertEquals(treinador2, batalha2.determinarPrimeiroAtacante(),
         "Treinador 2 possui maior SPD e deve receber a iniciativa.");
 
@@ -223,14 +270,23 @@ public class PokeSalTest {
     treinador1.setPokesal(empate1);
     treinador2.setPokesal(empate2);
 
-    // Random com retorno false sorteia treinador2 no operador ternario
-    Random randomFalso = new Random() {
+    GeradorAleatorio geradorFalso = new GeradorAleatorio() {
       @Override
-      public boolean nextBoolean() {
+      public double gerarDouble() {
+        return 0.50;
+      }
+
+      @Override
+      public int gerarInteiro(int limite) {
+        return 0;
+      }
+
+      @Override
+      public boolean gerarBooleano() {
         return false;
       }
     };
-    Batalha batalhaEmpate = new Batalha(treinador1, treinador2, terrenoNeutro, randomFalso);
+    Batalha batalhaEmpate = criarBatalha(treinador1, treinador2, terrenoNeutro, geradorFalso);
     assertEquals(treinador2, batalhaEmpate.determinarPrimeiroAtacante(),
         "No empate de SPD, o gerador pseudoaleatorio deve definir o desempate.");
   }
@@ -255,7 +311,7 @@ public class PokeSalTest {
     assertEquals(3, treinador1.getMochila().size());
     assertEquals(0, treinador1.getContItensUsados());
 
-    Batalha batalha = new Batalha(treinador1, treinador2, terrenoNeutro);
+    Batalha batalha = criarBatalha(treinador1, treinador2, terrenoNeutro);
 
     // 1o uso de item (permitido)
     batalha.consumirItemNoTurno(treinador1, 0);
@@ -284,7 +340,7 @@ public class PokeSalTest {
   @Test
   @DisplayName("testCalculoDanoBoundaryValues - Teste de valores limite de dano, HP e atributos")
   public void testCalculoDanoBoundaryValues() {
-    Batalha batalha = new Batalha(treinador1, treinador2, terrenoNeutro);
+    Batalha batalha = criarBatalha(treinador1, treinador2, terrenoNeutro);
 
     // Boundary 1: Dano minimo garantido de 1, mesmo quando DEF supera enormemente o ataque
     Pokesal atacanteFraco = criarPokesal("Fraco", HP_PADRAO, 1, DEF_PADRAO,
@@ -334,7 +390,7 @@ public class PokeSalTest {
     treinador1.setPokesal(poke1);
     treinador2.setPokesal(poke2);
 
-    Batalha batalha = new Batalha(treinador1, treinador2, terrenoNeutro);
+    Batalha batalha = criarBatalha(treinador1, treinador2, terrenoNeutro);
     Golpe golpe1 = poke1.getGolpes().get(0);
     Golpe golpe2 = poke2.getGolpes().get(0);
 
@@ -378,7 +434,7 @@ public class PokeSalTest {
     treinador1.setPokesal(poke1);
     treinador2.setPokesal(poke2);
 
-    Batalha batalha1 = new Batalha(treinador1, treinador2, terrenoNeutro);
+    Batalha batalha1 = criarBatalha(treinador1, treinador2, terrenoNeutro);
     Golpe golpeFraco = poke1.getGolpes().get(0);
 
     for (int i = 0; i < Batalha.LIMITE_MAXIMO_TURNOS; i++) {
@@ -402,7 +458,7 @@ public class PokeSalTest {
     treinador1.setPokesal(pokeIgual1);
     treinador2.setPokesal(pokeIgual2);
 
-    Batalha batalhaEmpate = new Batalha(treinador1, treinador2, terrenoNeutro);
+    Batalha batalhaEmpate = criarBatalha(treinador1, treinador2, terrenoNeutro);
     Golpe golpeMin = pokeIgual1.getGolpes().get(0);
 
     // Cada um sofre exatamente 5 golpes de 1 de dano
@@ -432,7 +488,7 @@ public class PokeSalTest {
         SPD_LENTO, TipoElemental.FOGO);
     Golpe golpeFogo = atacante.getGolpes().get(0);
 
-    Batalha batalha = new Batalha(treinador1, treinador2, terrenoNeutro);
+    Batalha batalha = criarBatalha(treinador1, treinador2, terrenoNeutro);
     int danoSemItem = batalha.calcularDano(atacante, defensor, golpeFogo); // Base: 40
 
     HeldItem carvao = new HeldItem("Carvao Incandescente",
@@ -466,7 +522,7 @@ public class PokeSalTest {
   @Test
   @DisplayName("testEscolhaInicialTreinadorValidaEInvalida - Regra 1: Selecao formal do inicial")
   public void testEscolhaInicialTreinadorValidaEInvalida() {
-    SimuladorDeBatalha simulador = new SimuladorDeBatalha();
+    SimuladorDeBatalha simulador = new SimuladorDeBatalha(new GeradorAleatorioPadrao());
     Treinador treinador = new Treinador("Treinador Teste");
 
     // 1. Escolha valida por nome

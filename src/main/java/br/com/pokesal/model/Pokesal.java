@@ -41,6 +41,7 @@ public class Pokesal {
   private HeldItem heldItem;
   private TipoStatus statusAtual;
   private int turnosEnvenenado;
+  private boolean vigorDePituacuAtivo;
 
   /**
    * Constroi um novo Pokesal com validacao da quantidade exata de golpes.
@@ -71,6 +72,7 @@ public class Pokesal {
     this.golpes = new ArrayList<>(golpes);
     this.statusAtual = TipoStatus.NENHUM;
     this.turnosEnvenenado = 0;
+    this.vigorDePituacuAtivo = false;
   }
 
   /**
@@ -82,6 +84,7 @@ public class Pokesal {
     this.spd = this.spdBase;
     this.statusAtual = TipoStatus.NENHUM;
     this.turnosEnvenenado = 0;
+    this.vigorDePituacuAtivo = false;
   }
 
   /**
@@ -319,5 +322,32 @@ public class Pokesal {
    */
   public void setHeldItem(HeldItem heldItem) {
     this.heldItem = heldItem;
+  }
+
+  /**
+   * Ativa o buff "Vigor de Pituacu" concedido pela torcida empolgada (RA-F03-01).
+   */
+  public void ativarVigorDePituacu() {
+    this.vigorDePituacuAtivo = true;
+  }
+
+  /**
+   * Consome o buff "Vigor de Pituacu" apos o proximo golpe e indica se estava ativo.
+   *
+   * @return true se o buff estava ativo antes do consumo, false caso contrario.
+   */
+  public boolean consumirVigorDePituacu() {
+    boolean estavaAtivo = this.vigorDePituacuAtivo;
+    this.vigorDePituacuAtivo = false;
+    return estavaAtivo;
+  }
+
+  /**
+   * Indica se o buff "Vigor de Pituacu" encontra-se ativo para o proximo golpe.
+   *
+   * @return true se ativo, false caso contrario.
+   */
+  public boolean isVigorDePituacuAtivo() {
+    return vigorDePituacuAtivo;
   }
 }
