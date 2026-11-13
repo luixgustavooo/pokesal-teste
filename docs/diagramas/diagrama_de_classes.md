@@ -1,54 +1,170 @@
-# Diagrama de Classes - PokeSal (Fases 01 e 02)
+# Diagrama de Classes - PokeSal (Fase 03: Inversão de Dependências e Mockito)
 
 **Projeto:** PokeSal - Simulador de Batalha (UCSal Pituaçu)  
 **Notação:** Mermaid Class Diagram  
+**Padrão Arquitetural:** Inversão de Dependência (DIP - SOLID) e Arquitetura em Camadas (Model, Service, Infra)
+
+---
 
 ```mermaid
 classDiagram
     direction TB
 
-    class Main {
-        -int TURNOS_POR_RODADA$
-        -double LIMIAR_HP_USO_POCAO$
-        -int INDICE_PRIMEIRO_TREINADOR$
-        -int INDICE_SEGUNDO_TREINADOR$
-        +main(String[] args)$ void
-        -executarCicloBatalha(Batalha batalha, Treinador t1, Treinador t2)$ void
-        -executarAcaoCompetidor(Batalha batalha, Treinador ativo, Treinador oponente)$ void
-        -interagirEscolhaInicial(SimuladorDeBatalha simulador, Treinador treinador, Scanner scanner)$ void
+    %% ==========================================
+    %% CAMADA DE INTERFACES (CONTRATOS DE SERVIÇO)
+    %% ==========================================
+    class GeradorAleatorio {
+        <<interface>>
+        +gerarDouble()* double
+        +gerarInteiro(int limiteExclusivo)* int
+        +gerarBooleano()* boolean
+    }
+
+    class ServicoTerreno {
+        <<interface>>
+        +obterModificadorDano(Terreno terreno, TipoElemental tipoGolpe, LocalDateTime horario)* double
+        +obterTerrenoAtual(LocalDateTime horario)* Terreno
+        +isEfeitoAtivo(Terreno terreno, LocalDateTime horario)* boolean
+    }
+
+    class RepositorioResultados {
+        <<interface>>
+        +salvar(ResultadoBatalha resultado)* void
+        +listarTodos()* List~ResultadoBatalha~
+    }
+
+    class RegistroBatalha {
+        <<interface>>
+        +registrarAtaque(Treinador atacante, Treinador defensor, Golpe golpe)* void
+        +registrarDano(Treinador atacante, Treinador defensor, int dano, boolean critico)* void
+        +registrarEfeitoStatus(Pokesal alvo, TipoStatus status)* void
+        +registrarEfeitoTerreno(Terreno terreno, Pokesal alvo)* void
+        +registrarUsoItem(Treinador treinador, ItemDeBatalha item)* void
+        +registrarFimDeBatalha(Treinador vencedor, Treinador perdedor, int turnos)* void
+    }
+
+    class ServicoTorcida {
+        <<interface>>
+        +aferirVibracao(Pokesal pokesal)* StatusTorcida
+    }
+
+    class ProcessadorDreno {
+        <<interface>>
+        +calcularCura(int danoCausado, double taxaDreno)* int
+    }
+
+    class ExecutorDeBatalha {
+        <<interface>>
+        +executar(Treinador t1, Treinador t2, Terreno terreno)* Batalha
+    }
+
+    %% ==========================================
+    %% CAMADA DE IMPLEMENTAÇÕES DE INFRAESTRUTURA
+    %% ==========================================
+    class GeradorAleatorioPadrao {
+        -Random random
+        +gerarDouble() double
+        +gerarInteiro(int limiteExclusivo) int
+        +gerarBooleano() boolean
+    }
+
+    class ServicoTerrenoPadrao {
+        -Clock clock
+        -boolean chovendo
+        +obterModificadorDano(Terreno terreno, TipoElemental tipoGolpe, LocalDateTime horario) double
+        +obterTerrenoAtual(LocalDateTime horario) Terreno
+        +isEfeitoAtivo(Terreno terreno, LocalDateTime horario) boolean
+    }
+
+    class RepositorioResultadosEmMemoria {
+        -List~ResultadoBatalha~ registros
+        +salvar(ResultadoBatalha resultado) void
+        +listarTodos() List~ResultadoBatalha~
+    }
+
+    class RegistroBatalhaConsole {
+        +registrarAtaque(Treinador atacante, Treinador defensor, Golpe golpe) void
+        +registrarDano(Treinador atacante, Treinador defensor, int dano, boolean critico) void
+        +registrarEfeitoStatus(Pokesal alvo, TipoStatus status) void
+        +registrarEfeitoTerreno(Terreno terreno, Pokesal alvo) void
+        +registrarUsoItem(Treinador treinador, ItemDeBatalha item) void
+        +registrarFimDeBatalha(Treinador vencedor, Treinador perdedor, int turnos) void
+    }
+
+    class ServicoTorcidaPadrao {
+        -GeradorAleatorio geradorAleatorio
+        +aferirVibracao(Pokesal pokesal) StatusTorcida
+    }
+
+    class ProcessadorDrenoPadrao {
+        +calcularCura(int danoCausado, double taxaDreno) int
+    }
+
+    class ExecutorDeBatalhaPadrao {
+        -GeradorAleatorio geradorAleatorio
+        -ServicoTerreno servicoTerreno
+        -Clock clock
+        -RepositorioResultados repositorioResultados
+        -RegistroBatalha registroBatalha
+        -ServicoTorcida servicoTorcida
+        -ProcessadorDreno processadorDreno
+        +executar(Treinador t1, Treinador t2, Terreno terreno) Batalha
+    }
+
+    GeradorAleatorio <|.. GeradorAleatorioPadrao : implementa
+    ServicoTerreno <|.. ServicoTerrenoPadrao : implementa
+    RepositorioResultados <|.. RepositorioResultadosEmMemoria : implementa
+    RegistroBatalha <|.. RegistroBatalhaConsole : implementa
+    ServicoTorcida <|.. ServicoTorcidaPadrao : implementa
+    ProcessadorDreno <|.. ProcessadorDrenoPadrao : implementa
+    ExecutorDeBatalha <|.. ExecutorDeBatalhaPadrao : implementa
+
+    %% ==========================================
+    %% CAMADA DE SERVIÇOS DE DOMÍNIO
+    %% ==========================================
+    class Batalha {
+        -Treinador treinador1
+        -Treinador treinador2
+        -Terreno terreno
+        -GeradorAleatorio geradorAleatorio
+        -ServicoTerreno servicoTerreno
+        -Clock clock
+        -RepositorioResultados repositorioResultados
+        -RegistroBatalha registroBatalha
+        -ServicoTorcida servicoTorcida
+        -ProcessadorDreno processadorDreno
+        -int turnoDaBatalha
+        -Treinador vencedor
+        -boolean encerrada
+        -List~String~ errosRegistrados
+        +determinarPrimeiroAtacante() Treinador
+        +calcularDano(Pokesal atacante, Pokesal defensor, Golpe golpe) int
+        +executarAcaoDeAtaque(Treinador atacante, Treinador defensor, Golpe golpe) int
+        +consumirItemNoTurno(Treinador treinador, int indiceItem) void
+        +verificarHp(Treinador t1, Treinador t2) void
+        +pontuarVencedor() void
+    }
+
+    class Torneio {
+        -ExecutorDeBatalha executorDeBatalha
+        -ServicoTerreno servicoTerreno
+        -GeradorAleatorio geradorAleatorio
+        -Clock clock
+        +executarTorneio(List~Treinador~ participantes) Treinador
     }
 
     class SimuladorDeBatalha {
         -List~Treinador~ treinadores
-        -Random random
-        -int contadorBatalha
-        +adicionarTreinador(Treinador treinador) void
-        +cadastrarTreinadores() void
-        +escolherPokesal(Treinador treinador, String nome) void
-        +escolherPokesal(Treinador treinador, int indice) void
+        -GeradorAleatorio geradorAleatorio
+        +cadastrarTreinadoresTorneio(int quantidade, String nomeJogador) void
         +sortearPokesal(Treinador treinador) void
         +sortearHeldItem(Treinador treinador) void
         +sortearTerreno() Terreno
-        +sortearPrimeiraPartida() List~Treinador~
-        +iniciarBatalha(Treinador t1, Treinador t2, Terreno terreno) Batalha
-        +obterCatalogoPokesal()$ List~Pokesal~
-        +obterCatalogoHeldItems()$ List~HeldItem~
-        +obterCatalogoTerrenos()$ List~Terreno~
-        +clonarPokesal(Pokesal base)$ Pokesal
     }
 
-    class Treinador {
-        -String nome
-        -Pokesal pokesal
-        -List~ItemDeBatalha~ mochila
-        -int contItensUsados
-        -int batalhasVencidas
-        +usarItem(int indice) void
-        +adicionarItem(ItemDeBatalha item) void
-        +incrementarBatalhasVencidas() void
-        +reiniciarParaNovaBatalha() void
-    }
-
+    %% ==========================================
+    %% CAMADA DE MODELOS
+    %% ==========================================
     class Pokesal {
         -String nome
         -int hpMax
@@ -60,22 +176,48 @@ classDiagram
         -List~Golpe~ golpes
         -HeldItem heldItem
         -TipoStatus statusAtual
-        -int turnosEnvenenado
+        -boolean vigorDePituacuAtivo
         +receberDano(int dano) void
         +curar(int qtd) void
-        +aplicarStatus(TipoStatus novoStatus) void
-        +curarStatus() void
+        +ativarVigorDePituacu() void
+        +consumirVigorDePituacu() boolean
         +processarEfeitosFimDeTurno() void
-        +estaDesmaiado() boolean
-        +restaurarParaNovaBatalha() void
     }
 
     class Golpe {
         -String nome
         -int poder
         -TipoElemental tipo
-        -EfeitoDeStatusGolpe efeitoStatus
-        +aplicarEfeito(Pokesal alvo, Random random) void
+        -int precisao
+        -boolean isGolpeDreno
+        -double taxaDreno
+    }
+
+    class Treinador {
+        -String nome
+        -Pokesal pokesal
+        -List~ItemDeBatalha~ mochila
+        -int contItensUsados
+        -int batalhasVencidas
+        +usarItem(int indice) void
+        +incrementarBatalhasVencidas() void
+    }
+
+    class ResultadoBatalha {
+        -Treinador vencedor
+        -Treinador perdedor
+        -int numeroTurnos
+        -Pokesal pokesalVencedor
+        -Pokesal pokesalPerdedor
+        -boolean empate
+        -LocalDateTime dataHoraFim
+    }
+
+    class StatusTorcida {
+        <<enumeration>>
+        EMPOLGADA
+        NEUTRA
+        VAIANDO
     }
 
     class TipoElemental {
@@ -83,7 +225,6 @@ classDiagram
         FOGO
         AGUA
         PLANTA
-        +obterMultiplicadorContra(TipoElemental defensor) double
     }
 
     class TipoStatus {
@@ -94,101 +235,27 @@ classDiagram
         PARALISADO
     }
 
-    class Batalha {
-        -Treinador treinador1
-        -Treinador treinador2
-        -Terreno terredoDaBatalha
-        -Random random
-        -int turnoDaBatalha
-        -Treinador vencedor
-        -boolean encerrada
-        +determinarPrimeiroAtacante() Treinador
-        +calcularDano(Pokesal atacante, Pokesal defensor, Golpe golpe) int
-        +executarAcaoDeAtaque(Treinador atacante, Treinador defensor, Golpe golpe) int
-        +consumirItemNoTurno(Treinador treinador, int indiceItem) void
-        +finalizarTurno() void
-        +verificarHp(Treinador t1, Treinador t2) void
-        +pontuarVencedor() void
-    }
-
-    class Terreno {
-        <<abstract>>
-        -String nome
-        -EfeitoDeStatusTerreno efeitoDeStatus
-        +obterModificadorDano(TipoElemental tipoGolpe)* double
-    }
-
-    class AsfaltoQuente {
-        +obterModificadorDano(TipoElemental tipoGolpe) double
-    }
-
-    class PocaDeChuva {
-        +obterModificadorDano(TipoElemental tipoGolpe) double
-    }
-
-    class CanteiroCentral {
-        +obterModificadorDano(TipoElemental tipoGolpe) double
-    }
-
-    class ItemDeBatalha {
-        <<abstract>>
-        -String nome
-        +aplicar(Pokesal pokesal)* void
-    }
-
-    class Potion {
-        +aplicar(Pokesal pokesal) void
-    }
-
-    class SuperPotion {
-        +aplicar(Pokesal pokesal) void
-    }
-
-    class Antidote {
-        +aplicar(Pokesal pokesal) void
-    }
-
-    class HeldItem {
-        -String nome
-        -EfeitoDeStatusHeld efeitoDeStatus
-    }
-
-    class EfeitoDeStatusHeld {
-        -int bonusDanoAtaque
-        -int curaPorTurno
-        -TipoElemental tipoBeneficiado
-        -double multiplicadorElemental
-    }
-
-    class EfeitoDeStatusGolpe {
-        -TipoStatus tipoStatus
-        -double chanceAtivacao
-        +tentarAplicar(Pokesal alvo, Random random) boolean
-    }
-
-    class LimiteItensExcedidosException {
-        <<exception>>
-    }
-
-    Main ..> SimuladorDeBatalha : utiliza
-    Main ..> Batalha : gerencia
-    SimuladorDeBatalha o-- Treinador : cadastra
+    %% ==========================================
+    %% RELACIONAMENTOS DE DEPENDÊNCIA E COMPOSIÇÃO
+    %% ==========================================
+    Batalha --> GeradorAleatorio : depende (DIP)
+    Batalha --> ServicoTerreno : depende (DIP)
+    Batalha --> RepositorioResultados : depende (DIP)
+    Batalha --> RegistroBatalha : depende (DIP)
+    Batalha --> ServicoTorcida : depende (DIP / RA-F03-01)
+    Batalha --> ProcessadorDreno : depende (DIP / RA-F03-02)
     Batalha o-- Treinador : competidores
-    Batalha o-- Terreno : arena
+    Batalha ..> ResultadoBatalha : produz
+
+    Torneio --> ExecutorDeBatalha : orquestra (DIP)
+    Torneio --> ServicoTerreno : consulta
+    Torneio --> GeradorAleatorio : desempate
+    Torneio o-- Treinador : participantes
+
     Treinador *-- Pokesal : parceiro
-    Treinador o-- ItemDeBatalha : mochila
-    Pokesal *-- Golpe : possui (exatamente 3)
-    Pokesal o-- HeldItem : equipa
+    Pokesal *-- Golpe : possui (3)
     Pokesal --> TipoElemental : tipagem
-    Pokesal --> TipoStatus : condicao
+    Pokesal --> TipoStatus : status
     Golpe --> TipoElemental : elemento
-    Golpe o-- EfeitoDeStatusGolpe : induz
-    HeldItem *-- EfeitoDeStatusHeld : efeito
-    Terreno <|-- AsfaltoQuente : especializacao
-    Terreno <|-- PocaDeChuva : especializacao
-    Terreno <|-- CanteiroCentral : especializacao
-    ItemDeBatalha <|-- Potion : especializacao
-    ItemDeBatalha <|-- SuperPotion : especializacao
-    ItemDeBatalha <|-- Antidote : especializacao
-    Batalha ..> LimiteItensExcedidosException : lanca
+    ServicoTorcida ..> StatusTorcida : avalia
 ```
